@@ -74,13 +74,18 @@
         file: file,
         torrent: torrent
       }
-      store_database()
     } else {
       createTorrent(file, {
         announceList: config.announce,
       }, (err, torrent) => {
         var torrent = parseTorrent(torrent)
         console.log(`seeding ${file} ${torrent.infoHash}`)
+
+        // remove old item when file changed
+        for (let k in database) {
+          if (database[k].file == file)
+            delete database[k]
+        }
 
         database[torrent.infoHash] = {
           file: file,
@@ -99,6 +104,8 @@
 
     //files = files.slice(0, 1)
     files.forEach(seed)
+    store_database()
+    database_cache = {}
   })
 
   // watch
@@ -109,12 +116,14 @@
     awaitWriteFinish: true,
   })
   .on('add', path => {
-    file_debounce[path] = debounce(seed, 30 * 1000)
+    if (!file_debounce[path])
+      file_debounce[path] = debounce(seed, 30 * 1000)
     file_debounce[path](path)
   })
   .on('change', path => {
-    if (file_debounce[path])
-      file_debounce[path](path)
+    if (!file_debounce[path])
+      file_debounce[path] = debounce(seed, 30 * 1000)
+    file_debounce[path](path)
   })
   .on('unlink', path => {
     var deleted = false
